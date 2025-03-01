@@ -78,18 +78,30 @@ router.post("/user-login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log("Login attempt with email:", email);
+    console.log("Password length:", password ? password.length : 0);
+
     // Find user
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
+      console.log("User not found with email:", email);
       return res.status(401).json({
         status: "error",
         message: "Invalid email or password",
       });
     }
 
+    console.log("User found:", user._id);
+    console.log("Stored password hash length:", user.password.length);
+    console.log("First 10 chars of hash:", user.password.substring(0, 10));
+
     // Check password
+    console.log("Comparing password...");
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log("Password match result:", isMatch);
+
     if (!isMatch) {
+      console.log("Password does not match for user:", user._id);
       return res.status(401).json({
         status: "error",
         message: "Invalid email or password",
