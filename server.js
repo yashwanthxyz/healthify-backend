@@ -1,9 +1,15 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
-const twilio = require("twilio");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
+
+// Debug: Print environment variables
+console.log("Debug - Environment Variables:");
+console.log("MONGODB_URI:", process.env.MONGODB_URI);
+console.log("JWT_SECRET:", process.env.JWT_SECRET);
+console.log("PORT:", process.env.PORT);
 
 const startServer = async () => {
   try {
@@ -29,11 +35,12 @@ const startServer = async () => {
       });
     });
 
-    // Initialize Twilio client
-    const twilioClient = twilio(
-      process.env.ACCOUNT_SID,
-      process.env.AUTH_TOKEN
-    );
+    // Initialize Twilio client (optional)
+    let twilioClient = null;
+    if (process.env.ACCOUNT_SID && process.env.AUTH_TOKEN) {
+      const twilio = require("twilio");
+      twilioClient = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+    }
 
     // Routes
     app.use("/api/v1", authRoutes);
@@ -48,59 +55,71 @@ const startServer = async () => {
       });
     });
 
-    // Test Twilio endpoint
-    app.post("/api/v1/test-twilio", async (req, res) => {
-      try {
-        await twilioClient.messages.create({
-          body: "Test message from Healthify app",
-          from: process.env.TWILIO_NUMBER,
-          to: process.env.TEST_PHONE_NUMBER,
-        });
-        res.json({
-          status: "success",
-          message: "Test message sent successfully",
-        });
-      } catch (error) {
-        console.error("Twilio test error:", error);
-        res.status(500).json({
-          status: "error",
-          message: "Failed to send test message",
-          error: error.message,
-        });
-      }
-    });
-
-    // SOS endpoint
-    app.post("/api/v1/sos", async (req, res) => {
-      try {
-        const { userName, location, emergencyContact } = req.body;
-
-        if (!userName || !location || !emergencyContact) {
-          return res.status(400).json({
+    // Test Twilio endpoint (only if Twilio is configured)
+    if (twilioClient) {
+      app.post("/api/v1/test-twilio", async (req, res) => {
+        try {
+          await twilioClient.messages.create({
+            body: "Test message from Healthify app",
+            from: process.env.TWILIO_NUMBER,
+            to: process.env.TEST_PHONE_NUMBER,
+          });
+          res.json({
+            status: "success",
+            message: "Test message sent successfully",
+          });
+        } catch (error) {
+          console.error("Twilio test error:", error);
+          res.status(500).json({
             status: "error",
-            message: "Missing required fields",
+            message: "Failed to send test message",
+            error: error.message,
           });
         }
+      });
 
-        await twilioClient.messages.create({
-          body: `SOS! Emergency alert from team healthify.\n${userName} might be suffering from a heart Stroke.\nLocation: ${location}`,
-          from: process.env.TWILIO_NUMBER,
-          to: emergencyContact,
-        });
+      // SOS endpoint
+      app.post("/api/v1/sos", async (req, res) => {
+        try {
+          const { userName, location, emergencyContact, message, medicalInfo } =
+            req.body;
 
-        res.json({
-          status: "success",
-          message: "Emergency alert sent successfully",
-        });
-      } catch (error) {
-        console.error("Error sending SOS:", error);
-        res.status(500).json({
-          status: "error",
-          message: "Failed to send emergency alert",
-          error: error.message,
-        });
-      }
-    });
+          if (!userName || !location || !emergencyContact) {
+            return res.status(400).json({
+              status: "error",
+              message: "Missing required fields",
+            });
+          }
+
+          const customMessage =
+            message ||
+            `SOS! Emergency alert from team healthify.\n${userName} might be suffering from a heart Stroke.`;
+          let smsBody = `${customMessage}\nLocation: ${location}`;
+
+          if (medicalInfo) {
+            smsBody += `\nMedical Info: ${medicalInfo}`;
+          }
+
+          await twilioClient.messages.create({
+            body: smsBody,
+            from: process.env.TWILIO_NUMBER,
+            to: emergencyContact,
+          });
+
+          res.json({
+            status: "success",
+            message: "Emergency alert sent successfully",
+          });
+        } catch (error) {
+          console.error("Error sending SOS:", error);
+          res.status(500).json({
+            status: "error",
+            message: "Failed to send emergency alert",
+            error: error.message,
+          });
+        }
+      });
+    }
 
     const PORT = process.env.PORT || 8000;
 
