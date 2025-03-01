@@ -98,6 +98,7 @@ router.post("/user-login", async (req, res) => {
     const passwordString =
       typeof password === "string" ? password : String(password);
     console.log("Converted password type:", typeof passwordString);
+    console.log("Converted password:", passwordString);
 
     // Find user
     const user = await User.findOne({ email }).select("+password");
@@ -118,15 +119,22 @@ router.post("/user-login", async (req, res) => {
     console.log("Input password:", passwordString);
     console.log("Stored hashed password:", user.password);
 
+    // Try direct bcrypt compare
     const isMatch = await bcrypt.compare(passwordString, user.password);
     console.log("Password match result:", isMatch);
 
     if (!isMatch) {
-      console.log("Password does not match for user:", user._id);
-      return res.status(401).json({
-        status: "error",
-        message: "Invalid email or password",
-      });
+      // Try with the user model method as a fallback
+      const isMatchWithMethod = await user.comparePassword(passwordString);
+      console.log("Password match with method result:", isMatchWithMethod);
+
+      if (!isMatchWithMethod) {
+        console.log("Password does not match for user:", user._id);
+        return res.status(401).json({
+          status: "error",
+          message: "Invalid email or password",
+        });
+      }
     }
 
     // Generate token

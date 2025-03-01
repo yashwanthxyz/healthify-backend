@@ -59,16 +59,22 @@ userSchema.pre("save", async function (next) {
     typeof passwordString
   );
   console.log("Pre-save hook: Password length:", passwordString.length);
+  console.log("Pre-save hook: Password value:", passwordString);
 
-  // Use consistent salt rounds (12)
-  this.password = await bcrypt.hash(passwordString, 12);
-  console.log("Pre-save hook: Hashed password length:", this.password.length);
-  console.log(
-    "Pre-save hook: First 10 chars of hash:",
-    this.password.substring(0, 10)
-  );
-
-  next();
+  try {
+    // Use consistent salt rounds (12)
+    this.password = await bcrypt.hash(passwordString, 12);
+    console.log("Pre-save hook: Hashed password length:", this.password.length);
+    console.log(
+      "Pre-save hook: First 10 chars of hash:",
+      this.password.substring(0, 10)
+    );
+    console.log("Pre-save hook: Full hash:", this.password);
+    next();
+  } catch (error) {
+    console.error("Pre-save hook: Error hashing password:", error);
+    next(error);
+  }
 });
 
 // Compare password method
@@ -86,10 +92,33 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
     "comparePassword method: Password length:",
     passwordString.length
   );
+  console.log("comparePassword method: Password value:", passwordString);
+  console.log("comparePassword method: Stored hash:", this.password);
 
-  const isMatch = await bcrypt.compare(passwordString, this.password);
-  console.log("comparePassword method: Match result:", isMatch);
-  return isMatch;
+  try {
+    const isMatch = await bcrypt.compare(passwordString, this.password);
+    console.log("comparePassword method: Match result:", isMatch);
+    return isMatch;
+  } catch (error) {
+    console.error("comparePassword method: Error during comparison:", error);
+    // Try manual comparison as a last resort
+    try {
+      // This is a fallback only - not recommended for production
+      const salt = this.password.substring(0, 29); // Extract the salt from the hash
+      console.log("comparePassword method: Extracted salt:", salt);
+      const newHash = await bcrypt.hash(passwordString, salt);
+      console.log(
+        "comparePassword method: New hash with extracted salt:",
+        newHash
+      );
+      const manualMatch = newHash === this.password;
+      console.log("comparePassword method: Manual match result:", manualMatch);
+      return manualMatch;
+    } catch (fallbackError) {
+      console.error("comparePassword method: Fallback error:", fallbackError);
+      return false;
+    }
+  }
 };
 
 const User = mongoose.model("User", userSchema);
