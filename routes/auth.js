@@ -80,6 +80,9 @@ router.post("/user-login", async (req, res) => {
 
     console.log("Login attempt with email:", email);
     console.log("Password length:", password ? password.length : 0);
+    console.log("Password type:", typeof password);
+    console.log("Request body:", JSON.stringify(req.body));
+    console.log("Request headers:", req.headers);
 
     // Find user
     const user = await User.findOne({ email }).select("+password");
