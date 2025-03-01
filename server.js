@@ -12,9 +12,22 @@ const startServer = async () => {
 
     const app = express();
 
+    // CORS configuration
+    app.use(cors()); // Allow all origins during development
+
     // Middleware
-    app.use(cors());
     app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+
+    // Error handling middleware
+    app.use((err, req, res, next) => {
+      console.error(err.stack);
+      res.status(500).json({
+        status: "error",
+        message: "Something went wrong!",
+        error: process.env.NODE_ENV === "development" ? err.message : undefined,
+      });
+    });
 
     // Initialize Twilio client
     const twilioClient = twilio(
@@ -27,11 +40,16 @@ const startServer = async () => {
 
     // Health check endpoint
     app.get("/api/v1/health", (req, res) => {
-      res.json({ status: "ok", message: "Server is running" });
+      res.json({
+        status: "ok",
+        message: "Server is running",
+        environment: process.env.NODE_ENV,
+        timestamp: new Date().toISOString(),
+      });
     });
 
     // Test Twilio endpoint
-    app.get("/api/v1/test-twilio", async (req, res) => {
+    app.post("/api/v1/test-twilio", async (req, res) => {
       try {
         await twilioClient.messages.create({
           body: "Test message from Healthify app",
@@ -57,8 +75,15 @@ const startServer = async () => {
       try {
         const { userName, location, emergencyContact } = req.body;
 
+        if (!userName || !location || !emergencyContact) {
+          return res.status(400).json({
+            status: "error",
+            message: "Missing required fields",
+          });
+        }
+
         await twilioClient.messages.create({
-          body: `SOS! Emergency alert from team healthify.\n${userName} might be suffering from a heart Stroke.\n${location}`,
+          body: `SOS! Emergency alert from team healthify.\n${userName} might be suffering from a heart Stroke.\nLocation: ${location}`,
           from: process.env.TWILIO_NUMBER,
           to: emergencyContact,
         });
@@ -83,6 +108,7 @@ const startServer = async () => {
       console.log(`Server is running on http://0.0.0.0:${PORT}`);
       console.log("Environment:", process.env.NODE_ENV);
       console.log("MongoDB URI:", process.env.MONGODB_URI ? "Set" : "Not Set");
+      console.log("JWT Secret:", process.env.JWT_SECRET ? "Set" : "Not Set");
       console.log("Twilio Config:", {
         accountSid: process.env.ACCOUNT_SID ? "Set" : "Not Set",
         authToken: process.env.AUTH_TOKEN ? "Set" : "Not Set",
