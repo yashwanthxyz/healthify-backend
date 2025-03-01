@@ -25,6 +25,12 @@ router.post("/user-register", async (req, res) => {
       });
     }
 
+    // Ensure password is a string
+    const passwordString =
+      typeof password === "string" ? password : String(password);
+    console.log("Password type after conversion:", typeof passwordString);
+    console.log("Password length:", passwordString.length);
+
     // Check if user already exists
     console.log("Checking for existing user with email:", email);
     const existingUser = await User.findOne({ email });
@@ -38,10 +44,14 @@ router.post("/user-register", async (req, res) => {
 
     // Create new user
     console.log("Creating new user with email:", email);
+    const hashedPassword = await bcrypt.hash(passwordString, 12);
+    console.log("Hashed password length:", hashedPassword.length);
+    console.log("First 10 chars of hash:", hashedPassword.substring(0, 10));
+
     const user = new User({
       fullName,
       email,
-      password: await bcrypt.hash(password, 10),
+      password: hashedPassword,
     });
 
     await user.save();
@@ -84,6 +94,11 @@ router.post("/user-login", async (req, res) => {
     console.log("Request body:", JSON.stringify(req.body));
     console.log("Request headers:", req.headers);
 
+    // Ensure password is a string
+    const passwordString =
+      typeof password === "string" ? password : String(password);
+    console.log("Converted password type:", typeof passwordString);
+
     // Find user
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
@@ -100,7 +115,10 @@ router.post("/user-login", async (req, res) => {
 
     // Check password
     console.log("Comparing password...");
-    const isMatch = await bcrypt.compare(password, user.password);
+    console.log("Input password:", passwordString);
+    console.log("Stored hashed password:", user.password);
+
+    const isMatch = await bcrypt.compare(passwordString, user.password);
     console.log("Password match result:", isMatch);
 
     if (!isMatch) {

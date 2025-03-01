@@ -50,13 +50,46 @@ const userSchema = new mongoose.Schema(
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 12);
+
+  // Ensure password is a string
+  const passwordString =
+    typeof this.password === "string" ? this.password : String(this.password);
+  console.log(
+    "Pre-save hook: Password type after conversion:",
+    typeof passwordString
+  );
+  console.log("Pre-save hook: Password length:", passwordString.length);
+
+  // Use consistent salt rounds (12)
+  this.password = await bcrypt.hash(passwordString, 12);
+  console.log("Pre-save hook: Hashed password length:", this.password.length);
+  console.log(
+    "Pre-save hook: First 10 chars of hash:",
+    this.password.substring(0, 10)
+  );
+
   next();
 });
 
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+  // Ensure candidate password is a string
+  const passwordString =
+    typeof candidatePassword === "string"
+      ? candidatePassword
+      : String(candidatePassword);
+  console.log(
+    "comparePassword method: Password type after conversion:",
+    typeof passwordString
+  );
+  console.log(
+    "comparePassword method: Password length:",
+    passwordString.length
+  );
+
+  const isMatch = await bcrypt.compare(passwordString, this.password);
+  console.log("comparePassword method: Match result:", isMatch);
+  return isMatch;
 };
 
 const User = mongoose.model("User", userSchema);
