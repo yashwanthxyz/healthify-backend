@@ -42,16 +42,12 @@ router.post("/user-register", async (req, res) => {
       });
     }
 
-    // Create new user
+    // Create new user - let the model's pre-save hook handle the password hashing
     console.log("Creating new user with email:", email);
-    const hashedPassword = await bcrypt.hash(passwordString, 12);
-    console.log("Hashed password length:", hashedPassword.length);
-    console.log("First 10 chars of hash:", hashedPassword.substring(0, 10));
-
     const user = new User({
       fullName,
       email,
-      password: hashedPassword,
+      password: passwordString, // The pre-save hook will hash this
     });
 
     await user.save();
@@ -114,40 +110,9 @@ router.post("/user-login", async (req, res) => {
     console.log("Stored password hash length:", user.password.length);
     console.log("First 10 chars of hash:", user.password.substring(0, 10));
 
-    // Check password
-    console.log("Comparing password...");
-    console.log("Input password:", passwordString);
-    console.log("Stored hashed password:", user.password);
-
-    // Try direct bcrypt compare
-    let isMatch = false;
-    try {
-      isMatch = await bcrypt.compare(passwordString, user.password);
-      console.log("Password match result:", isMatch);
-    } catch (compareError) {
-      console.error("Error during bcrypt.compare:", compareError);
-    }
-
-    if (!isMatch) {
-      // Try with the user model method as a fallback
-      try {
-        const isMatchWithMethod = await user.comparePassword(passwordString);
-        console.log("Password match with method result:", isMatchWithMethod);
-        isMatch = isMatchWithMethod;
-      } catch (methodError) {
-        console.error("Error during user.comparePassword:", methodError);
-      }
-    }
-
-    // TEMPORARY FIX: For testing purposes, allow login for the specific test user
-    if (
-      !isMatch &&
-      email === "yashwanth@gmail.com" &&
-      passwordString === "Yash@2910"
-    ) {
-      console.log("TEMPORARY FIX: Allowing login for test user");
-      isMatch = true;
-    }
+    // Check password using the model's method
+    const isMatch = await user.comparePassword(passwordString);
+    console.log("Password match result:", isMatch);
 
     if (!isMatch) {
       console.log("Password does not match for user:", user._id);
@@ -162,7 +127,7 @@ router.post("/user-login", async (req, res) => {
       expiresIn: "7d",
     });
 
-    res.json({
+    res.status(200).json({
       status: "success",
       message: "Login successful",
       token,
@@ -177,6 +142,7 @@ router.post("/user-login", async (req, res) => {
     res.status(500).json({
       status: "error",
       message: error.message || "Login failed",
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 });
