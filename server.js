@@ -103,13 +103,22 @@ const startServer = async () => {
 
     // Initialize Twilio client (optional)
     let twilioClient = null;
-    if (process.env.ACCOUNT_SID && process.env.AUTH_TOKEN) {
-      const twilio = require("twilio");
-      twilioClient = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
-      console.log("Twilio client initialized successfully");
+    if (
+      process.env.ACCOUNT_SID &&
+      process.env.AUTH_TOKEN &&
+      process.env.ACCOUNT_SID !== "YOUR_TWILIO_ACCOUNT_SID"
+    ) {
+      try {
+        const twilio = require("twilio");
+        twilioClient = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+        console.log("Twilio client initialized successfully");
+      } catch (error) {
+        console.error("Failed to initialize Twilio client:", error.message);
+        console.log("SMS features will be disabled");
+      }
     } else {
       console.log(
-        "Twilio credentials not found, SMS features will be disabled"
+        "Twilio credentials not found or are placeholder values, SMS features will be disabled"
       );
     }
 
