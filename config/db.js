@@ -33,8 +33,16 @@ const connectDB = async () => {
     });
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message}`);
-    // Don't exit process here, let the server handle the error
-    throw error;
+    // In production, we should throw the error but not exit the process
+    // This allows the server to handle the error gracefully
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "MongoDB connection failed in production, continuing to serve cached data if possible"
+      );
+    } else {
+      // In development, we might want to exit to force fixing the issue
+      process.exit(1);
+    }
   }
 };
 

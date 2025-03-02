@@ -22,11 +22,7 @@ const startServer = async () => {
     // CORS configuration
     app.use(
       cors({
-        origin: [
-          "http://localhost:3000",
-          "http://localhost",
-          "https://healthify-app.vercel.app",
-        ],
+        origin: "*", // Allow all origins for mobile app access
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
         credentials: true,
