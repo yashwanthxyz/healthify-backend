@@ -7,9 +7,10 @@ const authRoutes = require("./routes/auth");
 
 // Debug: Print environment variables
 console.log("Debug - Environment Variables:");
-console.log("MONGODB_URI:", process.env.MONGODB_URI);
-console.log("JWT_SECRET:", process.env.JWT_SECRET);
+console.log("MONGODB_URI:", process.env.MONGODB_URI ? "Set" : "Not Set");
+console.log("JWT_SECRET:", process.env.JWT_SECRET ? "Set" : "Not Set");
 console.log("PORT:", process.env.PORT);
+console.log("NODE_ENV:", process.env.NODE_ENV);
 
 const startServer = async () => {
   try {
@@ -19,7 +20,18 @@ const startServer = async () => {
     const app = express();
 
     // CORS configuration
-    app.use(cors()); // Allow all origins during development
+    app.use(
+      cors({
+        origin: [
+          "http://localhost:3000",
+          "http://localhost",
+          "https://healthify-app.vercel.app",
+        ],
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+        credentials: true,
+      })
+    );
 
     // Middleware
     app.use(express.json());
@@ -40,6 +52,11 @@ const startServer = async () => {
     if (process.env.ACCOUNT_SID && process.env.AUTH_TOKEN) {
       const twilio = require("twilio");
       twilioClient = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+      console.log("Twilio client initialized successfully");
+    } else {
+      console.log(
+        "Twilio credentials not found, SMS features will be disabled"
+      );
     }
 
     // Routes
@@ -59,11 +76,19 @@ const startServer = async () => {
     if (twilioClient) {
       app.post("/api/v1/test-twilio", async (req, res) => {
         try {
+          if (!process.env.TEST_PHONE_NUMBER) {
+            return res.status(400).json({
+              status: "error",
+              message: "TEST_PHONE_NUMBER environment variable is not defined",
+            });
+          }
+
           await twilioClient.messages.create({
             body: "Test message from Healthify app",
             from: process.env.TWILIO_NUMBER,
             to: process.env.TEST_PHONE_NUMBER,
           });
+
           res.json({
             status: "success",
             message: "Test message sent successfully",
