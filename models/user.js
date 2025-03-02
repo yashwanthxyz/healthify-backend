@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const userSchema = new mongoose.Schema(
   {
@@ -41,6 +42,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["male", "female", "other"],
     },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+    passwordResetToken: String,
+    passwordResetExpires: Date,
   },
   {
     timestamps: true,
@@ -75,6 +82,12 @@ userSchema.pre("save", async function (next) {
   }
 });
 
+// Update lastLogin when user logs in
+userSchema.methods.updateLastLogin = async function () {
+  this.lastLogin = new Date();
+  return this.save({ validateBeforeSave: false });
+};
+
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   try {
@@ -88,28 +101,31 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
       "comparePassword method: Password length:",
       passwordString.length
     );
-    console.log("comparePassword method: Password value:", passwordString);
     console.log("comparePassword method: Stored hash:", this.password);
 
     // Use bcrypt's compare function
     const isMatch = await bcrypt.compare(passwordString, this.password);
     console.log("comparePassword method: Match result:", isMatch);
 
-    // Special case for testing - remove in production
-    if (
-      !isMatch &&
-      this.email === "yashwanth@gmail.com" &&
-      passwordString === "Yash@2910"
-    ) {
-      console.log("TEMPORARY FIX: Allowing login for test user");
-      return true;
-    }
-
     return isMatch;
   } catch (error) {
     console.error("comparePassword method: Error comparing passwords:", error);
     return false;
   }
+};
+
+// Create password reset token
+userSchema.methods.createPasswordResetToken = function () {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  this.passwordResetToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  return resetToken;
 };
 
 const User = mongoose.model("User", userSchema);

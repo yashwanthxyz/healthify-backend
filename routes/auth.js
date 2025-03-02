@@ -7,7 +7,7 @@ const { protect } = require("../middleware/auth");
 const router = express.Router();
 
 // Register User
-router.post("/user-register", async (req, res) => {
+router.post("/register", async (req, res) => {
   try {
     console.log("Registration request received:", req.body);
     const { fullName, email, password } = req.body;
@@ -80,7 +80,7 @@ router.post("/user-register", async (req, res) => {
 });
 
 // Login User
-router.post("/user-login", async (req, res) => {
+router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -148,7 +148,7 @@ router.post("/user-login", async (req, res) => {
 });
 
 // Get User Profile
-router.get("/user-me", protect, async (req, res) => {
+router.get("/me", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
     if (!user) {
@@ -181,7 +181,7 @@ router.get("/user-me", protect, async (req, res) => {
 });
 
 // Update User Profile
-router.put("/user-me", protect, async (req, res) => {
+router.put("/me", protect, async (req, res) => {
   try {
     const updates = {
       fullName: req.body.fullName,
@@ -191,6 +191,11 @@ router.put("/user-me", protect, async (req, res) => {
       gender: req.body.gender,
       emergencyContacts: req.body.emergencyContacts,
     };
+
+    // Remove undefined fields
+    Object.keys(updates).forEach(
+      (key) => updates[key] === undefined && delete updates[key]
+    );
 
     const user = await User.findByIdAndUpdate(req.user.userId, updates, {
       new: true,
@@ -222,6 +227,84 @@ router.put("/user-me", protect, async (req, res) => {
     res.status(400).json({
       status: "error",
       message: error.message || "Failed to update profile",
+    });
+  }
+});
+
+// Change Password
+router.post("/change-password", protect, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        status: "error",
+        message: "Please provide both current and new password",
+      });
+    }
+
+    const user = await User.findById(req.user.userId).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        status: "error",
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    res.json({
+      status: "success",
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to change password",
+    });
+  }
+});
+
+// Refresh Token
+router.post("/refresh-token", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        message: "User not found",
+      });
+    }
+
+    // Generate new token
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({
+      status: "success",
+      token,
+    });
+  } catch (error) {
+    console.error("Token refresh error:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to refresh token",
     });
   }
 });

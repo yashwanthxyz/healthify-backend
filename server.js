@@ -1,16 +1,83 @@
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env") });
+// Ensure environment variables are loaded correctly
+const dotenv = require("dotenv");
+
+// Try multiple locations for the .env file
+console.log("Current directory:", __dirname);
+console.log("Attempting to load .env file...");
+
+// First try the new .env file
+let envResult = dotenv.config({ path: path.join(__dirname, ".env.new") });
+if (envResult.error) {
+  console.log("No .env.new file found, trying .env...");
+  // Try regular .env file
+  envResult = dotenv.config({ path: path.join(__dirname, ".env") });
+  if (envResult.error) {
+    console.log(
+      "No .env file found in current directory, trying parent directory..."
+    );
+    // Try parent directory
+    envResult = dotenv.config({ path: path.join(__dirname, "../.env") });
+    if (envResult.error) {
+      console.error(
+        "Error loading .env file from all locations:",
+        envResult.error
+      );
+      // Last resort: set environment variables manually for development
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Setting default environment variables for development...");
+        process.env.MONGODB_URI =
+          "mongodb+srv://healthify:healthify@cluster0.mongodb.net/healthify";
+        process.env.JWT_SECRET = "healthify_jwt_secret_key_2024";
+        process.env.PORT = "8000";
+        process.env.NODE_ENV = "development";
+      }
+    } else {
+      console.log("Loaded .env file from parent directory");
+    }
+  } else {
+    console.log("Loaded .env file from current directory");
+  }
+} else {
+  console.log("Loaded .env.new file from current directory");
+}
+
+// Debug: Print environment variables
+console.log("\nEnvironment Variables:");
+console.log("MONGODB_URI:", process.env.MONGODB_URI ? "Set" : "Not Set");
+console.log("JWT_SECRET:", process.env.JWT_SECRET ? "Set" : "Not Set");
+console.log("PORT:", process.env.PORT);
+console.log("NODE_ENV:", process.env.NODE_ENV);
+
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
 
-// Debug: Print environment variables
-console.log("Debug - Environment Variables:");
-console.log("MONGODB_URI:", process.env.MONGODB_URI ? "Set" : "Not Set");
-console.log("JWT_SECRET:", process.env.JWT_SECRET ? "Set" : "Not Set");
-console.log("PORT:", process.env.PORT);
-console.log("NODE_ENV:", process.env.NODE_ENV);
+// Global error handler
+const errorHandler = (err, req, res, next) => {
+  console.error(`Error: ${err.message}`);
+  console.error(err.stack);
+
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
+    status: "error",
+    message: err.message || "Something went wrong!",
+    error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
+};
+
+// Request logger middleware
+const requestLogger = (req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    console.log(
+      `${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`
+    );
+  });
+  next();
+};
 
 const startServer = async () => {
   try {
@@ -32,16 +99,7 @@ const startServer = async () => {
     // Middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-
-    // Error handling middleware
-    app.use((err, req, res, next) => {
-      console.error(err.stack);
-      res.status(500).json({
-        status: "error",
-        message: "Something went wrong!",
-        error: process.env.NODE_ENV === "development" ? err.message : undefined,
-      });
-    });
+    app.use(requestLogger);
 
     // Initialize Twilio client (optional)
     let twilioClient = null;
@@ -56,7 +114,7 @@ const startServer = async () => {
     }
 
     // Routes
-    app.use("/api/v1", authRoutes);
+    app.use("/api/v1/auth", authRoutes);
 
     // Health check endpoint
     app.get("/api/v1/health", (req, res) => {
@@ -65,6 +123,7 @@ const startServer = async () => {
         message: "Server is running",
         environment: process.env.NODE_ENV,
         timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
       });
     });
 
@@ -142,6 +201,17 @@ const startServer = async () => {
       });
     }
 
+    // Catch-all route for undefined routes
+    app.use("*", (req, res) => {
+      res.status(404).json({
+        status: "error",
+        message: "Route not found",
+      });
+    });
+
+    // Error handling middleware - must be after all routes
+    app.use(errorHandler);
+
     const PORT = process.env.PORT || 8000;
 
     app.listen(PORT, "0.0.0.0", () => {
@@ -160,5 +230,17 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // Don't exit the process here, just log the error
+});
 
 startServer();
